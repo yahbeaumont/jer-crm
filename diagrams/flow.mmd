@@ -1,0 +1,37 @@
+sequenceDiagram
+    autonumber
+    participant SCH as Scheduler
+    participant CRON as Cron handler
+    participant ENG as Engine
+    participant ADP as Registry adapter
+    participant SYS as System connection
+    participant PG as PostgreSQL
+
+    SCH->>CRON: POST with bearer secret
+    CRON->>CRON: compare secret, read force flag
+    CRON->>ENG: run one round
+    ENG->>SYS: read configuration and open queue per salesperson
+    SYS->>PG: select
+    PG-->>ENG: activity codes, states, floor, ceiling, load
+
+    alt every active salesperson at or above the floor, and not forced
+        ENG-->>CRON: nothing to do
+        CRON-->>SCH: 200 with no work
+    else below the floor
+        loop each activity code and state pair, in shuffled order
+            ENG->>ADP: search companies
+            ADP-->>ENG: rows, or an error recorded for this pair
+            ENG->>ENG: normalise, drop known tax IDs, dedupe by company root
+        end
+        ENG->>ENG: shuffle candidates and assign to the least loaded salesperson
+        ENG->>SYS: open transaction
+        SYS->>PG: insert batch, upsert companies, insert assignments on conflict do nothing
+        PG-->>SYS: inserted and skipped counts
+        SYS->>PG: commit
+        ENG->>ADP: enrich a bounded batch, free sources, fixed workers
+        ADP-->>ENG: company records and officers
+        ENG->>SYS: store enrichment results
+        ENG->>SYS: write the run record with counts, duration and errors
+        ENG-->>CRON: counts per salesperson
+        CRON-->>SCH: 200 with the run summary
+    end

@@ -1,0 +1,42 @@
+flowchart TB
+    UI["Browser<br/>pages and forms, server-rendered"]
+
+    subgraph App["Next.js server"]
+        direction TB
+        SPACER[" "]
+        SC["Server components<br/>read through the service layer"]
+        SA["Server actions<br/>validate input, re-check the session"]
+        RH["Route handlers<br/>CSV export, health, cron trigger"]
+        SV["Service layer<br/>business rules and SQL"]
+        UP["Session pool<br/>actor context per transaction"]
+        AP["System pool<br/>administrative connection"]
+    end
+
+    subgraph EXT["Optional adapters, called from the server only"]
+        P1["Registry provider<br/>metered per search"]
+        P2["Public registry mirror<br/>free"]
+        P3["Search API<br/>paid per call"]
+    end
+
+    subgraph DB["PostgreSQL boundary"]
+        POL["Row Level Security<br/>policies read the actor context"]
+        DATA["Ten tables, two caller-scoped views"]
+    end
+
+    SPACER ~~~ SC
+    UI --> SC
+    UI --> SA
+    UI --> RH
+    SA --> SV
+    SC --> SV
+    RH --> SV
+    SV --> UP
+    SV --> AP
+    UP --> POL
+    POL --> DATA
+    AP --> DATA
+    SV -.-> P1
+    SV -.-> P2
+    SV -.-> P3
+
+    style SPACER fill:none,stroke:none,color:transparent
